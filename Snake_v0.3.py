@@ -230,7 +230,7 @@ def main():
         current_fps = INITIAL_FPS
         
         # Victory conditions - z.B. wenn eine bestimmte Punktzahl erreicht wird
-        victory_score = 30  # Erreiche 30 Punkte zum Sieg
+        victory_score = 15  # Erreiche 30 Punkte zum Sieg
 
         # Game state flags
         game_over = False
