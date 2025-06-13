@@ -5,6 +5,7 @@
 #  ██    ██ ██       ██  ██    ██ █████   ██████  
 #  ██    ██ ██       ██   ██  ██  ██      ██   ██ 
 #   ██████  ███████  ██    ████   ███████ ██   ██ 
+# (c) 2025 by oliver@devtron.pro
 import pygame
 import sys
 import random
