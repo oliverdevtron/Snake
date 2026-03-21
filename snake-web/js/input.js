@@ -1,211 +1,194 @@
 /**
- * input.js - Eingabeverwaltung: Tastatur, Touch und Swipe-Gesten
+ * Snake Game - Eingabe-System
+ * Tastatur, Touch/Swipe und On-Screen D-Pad Steuerung
  */
 
-class InputManager {
-    constructor() {
-        this.directionQueue = [];
-        this.maxQueueSize = 3;
-        this.keys = {};
-        this.touchStartX = 0;
-        this.touchStartY = 0;
-        this.touchStartTime = 0;
-        this.minSwipeDistance = 30;
-        this.callbacks = {};
-        this._bound = false;
-    }
+const Input = {
+    // Aktuelle Richtungsänderung (wird pro Frame abgerufen)
+    pendingDirection: null,
 
-    /**
-     * Bindet alle Eingabe-Listener.
-     */
-    bind() {
-        if (this._bound) return;
-        this._bound = true;
+    // Aktionstasten
+    actions: {
+        pause: false,
+        gridToggle: false,
+        restart: false,
+        quit: false,
+        select: false,
+        wrapToggle: false,
+        crtToggle: false,
+        soundToggle: false,
+        nameBackspace: false,
+        nameSubmit: false,
+    },
+    nameChar: null, // Letztes eingegebenes Zeichen für Namenseingabe
 
-        this._onKeyDown = this._handleKeyDown.bind(this);
-        this._onKeyUp = this._handleKeyUp.bind(this);
-        this._onTouchStart = this._handleTouchStart.bind(this);
-        this._onTouchEnd = this._handleTouchEnd.bind(this);
+    // Touch-State
+    _touchStartX: 0,
+    _touchStartY: 0,
+    _touchStartTime: 0,
 
-        document.addEventListener('keydown', this._onKeyDown);
-        document.addEventListener('keyup', this._onKeyUp);
+    // Aktueller Richtungszustand (für die Verhindung von 180°-Wenden)
+    _currentDirection: null,
 
-        const canvas = document.getElementById('gameCanvas');
-        if (canvas) {
-            canvas.addEventListener('touchstart', this._onTouchStart, { passive: false });
-            canvas.addEventListener('touchend', this._onTouchEnd, { passive: false });
-        }
-    }
+    // Callback für Menü-Aktionen
+    onMenuKey: null,
 
-    /**
-     * Registriert einen Callback für ein bestimmtes Ereignis.
-     */
-    on(event, callback) {
-        if (!this.callbacks[event]) this.callbacks[event] = [];
-        this.callbacks[event].push(callback);
-    }
+    init() {
+        document.addEventListener('keydown', (e) => this._handleKeyDown(e));
+        this._initTouch();
+        this._initDpad();
+    },
 
-    emit(event, data) {
-        if (this.callbacks[event]) {
-            this.callbacks[event].forEach(cb => cb(data));
-        }
-    }
+    setCurrentDirection(dir) {
+        this._currentDirection = dir;
+    },
+
+    consumeDirection() {
+        const dir = this.pendingDirection;
+        this.pendingDirection = null;
+        return dir;
+    },
+
+    consumeAction(name) {
+        const val = this.actions[name];
+        this.actions[name] = false;
+        return val;
+    },
+
+    consumeNameChar() {
+        const c = this.nameChar;
+        this.nameChar = null;
+        return c;
+    },
+
+    resetAll() {
+        this.pendingDirection = null;
+        for (const key in this.actions) this.actions[key] = false;
+        this.nameChar = null;
+    },
 
     _handleKeyDown(e) {
-        this.keys[e.code] = true;
+        const key = e.key.toLowerCase();
 
-        // Richtungseingaben (Pfeiltasten + WASD)
-        const dirMap = {
-            'ArrowUp': 'UP', 'KeyW': 'UP',
-            'ArrowDown': 'DOWN', 'KeyS': 'DOWN',
-            'ArrowLeft': 'LEFT', 'KeyA': 'LEFT',
-            'ArrowRight': 'RIGHT', 'KeyD': 'RIGHT',
-        };
-
-        if (dirMap[e.code]) {
+        // Richtungseingaben
+        if ((key === 'arrowup' || key === 'w') && this._currentDirection !== 'down') {
+            this.pendingDirection = 'up';
             e.preventDefault();
-            this.queueDirection(dirMap[e.code]);
-            return;
+        } else if ((key === 'arrowdown' || key === 's') && this._currentDirection !== 'up') {
+            this.pendingDirection = 'down';
+            e.preventDefault();
+        } else if ((key === 'arrowleft' || key === 'a') && this._currentDirection !== 'right') {
+            this.pendingDirection = 'left';
+            e.preventDefault();
+        } else if ((key === 'arrowright' || key === 'd') && this._currentDirection !== 'left') {
+            this.pendingDirection = 'right';
+            e.preventDefault();
         }
 
-        // Sondertasten
-        switch (e.code) {
-            case 'KeyP':
-            case 'Escape':
-                e.preventDefault();
-                this.emit('pause');
-                break;
-            case 'KeyG':
-                e.preventDefault();
-                this.emit('toggleGrid');
-                break;
-            case 'KeyM':
-                e.preventDefault();
-                this.emit('toggleSound');
-                break;
-            case 'KeyC':
-                e.preventDefault();
-                this.emit('toggleCRT');
-                break;
-            case 'KeyR':
-                e.preventDefault();
-                this.emit('restart');
-                break;
-            case 'KeyQ':
-                e.preventDefault();
-                this.emit('quit');
-                break;
-            case 'Digit1':
-            case 'Numpad1':
-                e.preventDefault();
-                this.emit('selectDifficulty', 1);
-                break;
-            case 'Digit2':
-            case 'Numpad2':
-                e.preventDefault();
-                this.emit('selectDifficulty', 2);
-                break;
-            case 'Digit3':
-            case 'Numpad3':
-                e.preventDefault();
-                this.emit('selectDifficulty', 3);
-                break;
-            case 'Enter':
-            case 'Space':
-                e.preventDefault();
-                this.emit('confirm');
-                break;
-            case 'Backspace':
-                e.preventDefault();
-                this.emit('backspace');
-                break;
+        // Aktionstasten
+        if (key === 'p' || key === 'escape') this.actions.pause = true;
+        if (key === 'g') this.actions.gridToggle = true;
+        if (key === 'r') this.actions.restart = true;
+        if (key === 'q') this.actions.quit = true;
+        if (key === 'enter') this.actions.select = true;
+        if (key === 'v') this.actions.wrapToggle = true;
+        if (key === 'c') this.actions.crtToggle = true;
+        if (key === 'm') this.actions.soundToggle = true;
+
+        // Namenseingabe
+        if (key === 'backspace') {
+            this.actions.nameBackspace = true;
+            e.preventDefault();
+        }
+        if (key === 'enter') this.actions.nameSubmit = true;
+        if (e.key.length === 1 && e.key.match(/[a-zA-Z0-9 _\-]/)) {
+            this.nameChar = e.key;
         }
 
-        // Text-Eingabe für Highscore-Name
-        if (e.key.length === 1 && e.key.match(/[a-zA-Z0-9 _-]/)) {
-            this.emit('textInput', e.key);
-        }
-    }
-
-    _handleKeyUp(e) {
-        this.keys[e.code] = false;
-    }
-
-    _handleTouchStart(e) {
-        e.preventDefault();
-        const touch = e.touches[0];
-        this.touchStartX = touch.clientX;
-        this.touchStartY = touch.clientY;
-        this.touchStartTime = Date.now();
-    }
-
-    _handleTouchEnd(e) {
-        e.preventDefault();
-        if (!e.changedTouches.length) return;
-
-        const touch = e.changedTouches[0];
-        const dx = touch.clientX - this.touchStartX;
-        const dy = touch.clientY - this.touchStartY;
-        const elapsed = Date.now() - this.touchStartTime;
-
-        // Tap-Erkennung (kurz und wenig Bewegung)
-        if (elapsed < 200 && Math.abs(dx) < 10 && Math.abs(dy) < 10) {
-            this.emit('tap');
-            return;
+        // Schwierigkeitsauswahl (1-3)
+        if (key === '1' || key === '2' || key === '3') {
+            if (this.onMenuKey) this.onMenuKey(parseInt(key));
         }
 
-        // Swipe-Erkennung
-        if (Math.abs(dx) < this.minSwipeDistance && Math.abs(dy) < this.minSwipeDistance) return;
-
-        if (Math.abs(dx) > Math.abs(dy)) {
-            this.queueDirection(dx > 0 ? 'RIGHT' : 'LEFT');
-        } else {
-            this.queueDirection(dy > 0 ? 'DOWN' : 'UP');
+        // Menü-Callback
+        if (this.onMenuKey && (key === 'arrowup' || key === 'arrowdown' || key === 'enter' ||
+            key === 'w' || key === 's' || key === ' ')) {
+            this.onMenuKey(key);
         }
-    }
+    },
 
-    /**
-     * Fügt eine Richtung zur Warteschlange hinzu.
-     */
-    queueDirection(dir) {
-        if (this.directionQueue.length < this.maxQueueSize) {
-            this.directionQueue.push(dir);
-        }
-    }
+    _initTouch() {
+        const canvas = document.getElementById('gameCanvas');
+        if (!canvas) return;
 
-    /**
-     * Holt die nächste Richtung aus der Warteschlange.
-     */
-    dequeueDirection() {
-        return this.directionQueue.shift() || null;
-    }
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            this._touchStartX = touch.clientX;
+            this._touchStartY = touch.clientY;
+            this._touchStartTime = Date.now();
+        }, { passive: false });
 
-    /**
-     * Leert die Richtungswarteschlange.
-     */
-    clearQueue() {
-        this.directionQueue = [];
-    }
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (!e.changedTouches.length) return;
+            const touch = e.changedTouches[0];
+            const dx = touch.clientX - this._touchStartX;
+            const dy = touch.clientY - this._touchStartY;
+            const elapsed = Date.now() - this._touchStartTime;
 
-    /**
-     * D-Pad-Button-Handler für Mobile
-     */
-    setupDpad() {
+            // Tap (kurzer Berührung ohne Bewegung) = Pause
+            if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && elapsed < 300) {
+                this.actions.pause = true;
+                return;
+            }
+
+            // Swipe-Erkennung
+            if (Math.abs(dx) < Config.SWIPE_THRESHOLD && Math.abs(dy) < Config.SWIPE_THRESHOLD) return;
+
+            if (Math.abs(dx) > Math.abs(dy)) {
+                // Horizontaler Swipe
+                if (dx > 0 && this._currentDirection !== 'left') {
+                    this.pendingDirection = 'right';
+                } else if (dx < 0 && this._currentDirection !== 'right') {
+                    this.pendingDirection = 'left';
+                }
+            } else {
+                // Vertikaler Swipe
+                if (dy > 0 && this._currentDirection !== 'up') {
+                    this.pendingDirection = 'down';
+                } else if (dy < 0 && this._currentDirection !== 'down') {
+                    this.pendingDirection = 'up';
+                }
+            }
+        }, { passive: false });
+    },
+
+    _initDpad() {
         const dirs = ['up', 'down', 'left', 'right'];
         dirs.forEach(dir => {
-            const btn = document.getElementById(`dpad-${dir}`);
-            if (btn) {
-                btn.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    this.queueDirection(dir.toUpperCase());
-                }, { passive: false });
-                btn.addEventListener('mousedown', (e) => {
-                    e.preventDefault();
-                    this.queueDirection(dir.toUpperCase());
-                });
-            }
+            const btn = document.getElementById('dpad-' + dir);
+            if (!btn) return;
+            const handler = (e) => {
+                e.preventDefault();
+                const opposites = { up: 'down', down: 'up', left: 'right', right: 'left' };
+                if (this._currentDirection !== opposites[dir]) {
+                    this.pendingDirection = dir;
+                }
+            };
+            btn.addEventListener('touchstart', handler, { passive: false });
+            btn.addEventListener('mousedown', handler);
         });
-    }
-}
 
-const input = new InputManager();
+        // Pause-Button
+        const pauseBtn = document.getElementById('dpad-center');
+        if (pauseBtn) {
+            const handler = (e) => {
+                e.preventDefault();
+                this.actions.pause = true;
+            };
+            pauseBtn.addEventListener('touchstart', handler, { passive: false });
+            pauseBtn.addEventListener('mousedown', handler);
+        }
+    }
+};

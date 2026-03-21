@@ -3,52 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta name="description" content="Snake - Retro Arcade Web Edition. Klassisches Snake-Spiel mit modernem Neon-Design.">
-    <meta name="theme-color" content="#0a0a0a">
+    <meta name="description" content="Snake Game - Retro Arcade Klassiker im Browser. Neon-Ästhetik, Touch-Steuerung, Highscores.">
     <title>Snake - Retro Arcade Edition</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>">
 </head>
 <body>
-    <div id="game-wrapper">
-        <header id="game-header">
-            <h1 class="header-title">SNAKE</h1>
-            <div class="header-controls">
-                <button id="btn-sound" class="icon-btn" title="Sound (M)">
-                    <span id="sound-icon">🔊</span>
-                </button>
-                <button id="btn-crt" class="icon-btn" title="CRT-Effekt (C)">
-                    <span>📺</span>
-                </button>
-                <button id="btn-grid" class="icon-btn" title="Gitter (G)">
-                    <span>⊞</span>
-                </button>
-            </div>
-        </header>
+    <div id="game-container">
+        <h1 class="game-title">SNAKE</h1>
+        <p class="game-subtitle">RETRO ARCADE EDITION</p>
 
-        <main id="game-container">
+        <div class="canvas-wrapper">
             <canvas id="gameCanvas"></canvas>
-        </main>
-
-        <!-- Mobile D-Pad -->
-        <div id="dpad-container" class="dpad">
-            <button id="dpad-up" class="dpad-btn dpad-up" aria-label="Oben">▲</button>
-            <div class="dpad-row">
-                <button id="dpad-left" class="dpad-btn dpad-left" aria-label="Links">◄</button>
-                <div class="dpad-center"></div>
-                <button id="dpad-right" class="dpad-btn dpad-right" aria-label="Rechts">►</button>
-            </div>
-            <button id="dpad-down" class="dpad-btn dpad-down" aria-label="Unten">▼</button>
         </div>
 
-        <footer id="game-footer">
-            <span class="footer-text">Designed by Oliver | Web Edition mit KI</span>
-        </footer>
+        <div class="info-bar">
+            <span>
+                <span class="status-dot" id="sound-status"></span>
+                TON [M]
+            </span>
+            <span>
+                <span class="status-dot" id="grid-status"></span>
+                GITTER [G]
+            </span>
+            <span>
+                <span class="status-dot" id="wrap-status"></span>
+                WRAP [V]
+            </span>
+            <span>
+                <span class="status-dot" id="crt-status"></span>
+                CRT [C]
+            </span>
+        </div>
+
+        <!-- Mobile D-Pad -->
+        <div class="dpad-container">
+            <div class="dpad-btn" id="dpad-up">▲</div>
+            <div class="dpad-btn" id="dpad-down">▼</div>
+            <div class="dpad-btn" id="dpad-left">◄</div>
+            <div class="dpad-btn" id="dpad-right">►</div>
+            <div class="dpad-btn" id="dpad-center">II</div>
+        </div>
+
+        <div class="game-footer">
+            DESIGNED BY OLIVER &middot; WEB VERSION 2.0<br>
+            PFEILTASTEN/WASD BEWEGEN &middot; P/ESC PAUSE &middot; SWIPE AUF MOBIL
+        </div>
     </div>
 
-    <!-- Scripts in Reihenfolge: Config → Module → Game -->
+    <!-- JavaScript Module (Reihenfolge wichtig wegen Abhängigkeiten) -->
     <script src="js/config.js"></script>
     <script src="js/audio.js"></script>
     <script src="js/input.js"></script>
@@ -57,5 +60,25 @@
     <script src="js/effects.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/game.js"></script>
+
+    <!-- Status-Indikatoren aktualisieren -->
+    <script>
+        // Status-Dots für Toggle-Optionen aktualisieren
+        setInterval(() => {
+            if (typeof Game === 'undefined') return;
+            const dots = {
+                'sound-status': Audio.enabled,
+                'grid-status': Game.showGrid,
+                'wrap-status': Game.wrapAround,
+                'crt-status': Game.showCRT,
+            };
+            for (const [id, active] of Object.entries(dots)) {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.className = 'status-dot ' + (active ? 'on' : 'off');
+                }
+            }
+        }, 200);
+    </script>
 </body>
 </html>

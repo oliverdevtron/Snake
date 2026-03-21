@@ -1,214 +1,134 @@
 /**
- * snake.js - Schlangen-Entität: Bewegung, Kollision und Rendering
+ * Snake Game - Schlangen-Entität
+ * Bewegung, Kollision, Rendering mit Gradient-Körper
  */
 
-class Snake {
-    constructor() {
-        this.body = [];
-        this.direction = { x: 1, y: 0 };
-        this.nextDirection = { x: 1, y: 0 };
-        this.alive = true;
-        this.bodySet = new Set(); // O(1) Kollisionsprüfung
-    }
+const Snake = {
+    body: [],        // Array von {x, y} — body[0] ist der Kopf
+    direction: 'right',
+    _bodySet: null,  // Set für O(1)-Kollisionsprüfung
 
-    /**
-     * Setzt die Schlange auf die Startposition zurück.
-     */
-    reset() {
-        const cx = Math.floor(CONFIG.GRID_WIDTH / 2);
-        const cy = Math.floor(CONFIG.GRID_HEIGHT / 2);
-        this.body = [
-            { x: cx, y: cy },
-            { x: cx - 1, y: cy },
-            { x: cx - 2, y: cy },
-        ];
-        this.direction = { x: 1, y: 0 };
-        this.nextDirection = { x: 1, y: 0 };
-        this.alive = true;
+    init(startX, startY, length) {
+        this.body = [];
+        for (let i = 0; i < length; i++) {
+            this.body.push({ x: startX - i, y: startY });
+        }
+        this.direction = 'right';
         this._rebuildSet();
-    }
+    },
 
     _rebuildSet() {
-        this.bodySet.clear();
-        this.body.forEach(seg => this.bodySet.add(`${seg.x},${seg.y}`));
-    }
+        this._bodySet = new Set(this.body.map(s => s.x + ',' + s.y));
+    },
 
-    /**
-     * Setzt die Richtung, verhindert 180°-Wendungen.
-     */
-    setDirection(dir) {
-        const dirs = {
-            UP: { x: 0, y: -1 },
-            DOWN: { x: 0, y: 1 },
-            LEFT: { x: -1, y: 0 },
-            RIGHT: { x: 1, y: 0 },
-        };
-        const nd = dirs[dir];
-        if (!nd) return;
-        // Verhindere Rückwärtsbewegung
-        if (nd.x + this.direction.x === 0 && nd.y + this.direction.y === 0) return;
-        this.nextDirection = nd;
-    }
+    getHead() {
+        return this.body[0];
+    },
 
-    /**
-     * Bewegt die Schlange einen Schritt.
-     * @param {boolean} wrapAround - Ob die Schlange durch Wände gehen kann
-     * @returns {{ ate: boolean, newHead: {x,y}, oldTail: {x,y}|null, collision: string|null }}
-     */
-    move(obstacles, foodPos, wrapAround) {
-        this.direction = this.nextDirection;
+    length() {
+        return this.body.length;
+    },
+
+    // Bewege die Schlange in die aktuelle Richtung
+    // Gibt die neue Kopfposition zurück (noch nicht dem Body hinzugefügt)
+    getNextHead(wrapAround) {
         const head = this.body[0];
-        let nx = head.x + this.direction.x;
-        let ny = head.y + this.direction.y;
+        const deltas = {
+            up: { x: 0, y: -1 },
+            down: { x: 0, y: 1 },
+            left: { x: -1, y: 0 },
+            right: { x: 1, y: 0 },
+        };
+        const d = deltas[this.direction];
+        let nx = head.x + d.x;
+        let ny = head.y + d.y;
 
-        // Wrap-Around oder Wandkollision
         if (wrapAround) {
-            nx = ((nx % CONFIG.GRID_WIDTH) + CONFIG.GRID_WIDTH) % CONFIG.GRID_WIDTH;
-            ny = ((ny % CONFIG.GRID_HEIGHT) + CONFIG.GRID_HEIGHT) % CONFIG.GRID_HEIGHT;
-        } else if (nx < 0 || nx >= CONFIG.GRID_WIDTH || ny < 0 || ny >= CONFIG.GRID_HEIGHT) {
-            this.alive = false;
-            return { ate: false, newHead: { x: nx, y: ny }, oldTail: null, collision: 'wall' };
+            nx = (nx + Config.GRID_WIDTH) % Config.GRID_WIDTH;
+            ny = (ny + Config.GRID_HEIGHT) % Config.GRID_HEIGHT;
         }
 
-        const newHead = { x: nx, y: ny };
-        const key = `${nx},${ny}`;
+        return { x: nx, y: ny };
+    },
 
-        // Selbstkollision (ohne Schwanz, da er sich bewegt)
-        // Prüfe nur body[0..n-2], da body[n-1] gleich entfernt wird (es sei denn, gegessen)
-        if (this.bodySet.has(key)) {
-            // Prüfe ob es der Schwanz ist (der sich sowieso bewegt)
-            const tail = this.body[this.body.length - 1];
-            const isTail = tail.x === nx && tail.y === ny;
-            const atFood = foodPos && nx === foodPos.x && ny === foodPos.y;
-            if (!isTail || atFood) {
-                this.alive = false;
-                return { ate: false, newHead, oldTail: null, collision: 'self' };
-            }
-        }
-
-        // Hinderniskollision
-        if (obstacles.some(o => o[0] === nx && o[1] === ny)) {
-            this.alive = false;
-            return { ate: false, newHead, oldTail: null, collision: 'obstacle' };
-        }
-
-        // Kopf hinzufügen
+    // Füge neuen Kopf hinzu, optional Schwanz entfernen
+    move(newHead, grow) {
         this.body.unshift(newHead);
-        this.bodySet.add(key);
-
-        // Futter prüfen
-        const ate = foodPos && nx === foodPos.x && ny === foodPos.y;
-        let oldTail = null;
-        if (!ate) {
-            oldTail = this.body.pop();
-            this.bodySet.delete(`${oldTail.x},${oldTail.y}`);
+        if (!grow) {
+            this.body.pop();
         }
+        this._rebuildSet();
+    },
 
-        return { ate, newHead, oldTail, collision: null };
-    }
+    // Prüfe Selbstkollision (neuer Kopf gegen Körper ohne aktuellen Kopf)
+    collidesWithSelf(pos) {
+        const key = pos.x + ',' + pos.y;
+        // Prüfe gegen alle Segmente außer dem letzten (das wird entfernt)
+        return this._bodySet.has(key);
+    },
 
-    /**
-     * Zeichnet die Schlange mit Gradient-Effekt auf dem Canvas.
-     */
+    collidesWithBody(pos) {
+        return this._bodySet.has(pos.x + ',' + pos.y);
+    },
+
+    // Zeichne die Schlange mit Gradient von Kopf bis Schwanz
     draw(ctx, cellSize, time) {
         const len = this.body.length;
 
-        // Glow-Effekt für den Kopf
-        const head = this.body[0];
-        const hx = head.x * cellSize + cellSize / 2;
-        const hy = head.y * cellSize + cellSize / 2;
-        ctx.save();
-        ctx.shadowColor = CONFIG.COLORS.SNAKE_GLOW;
-        ctx.shadowBlur = 15;
-        ctx.fillStyle = CONFIG.COLORS.SNAKE_HEAD;
-        ctx.fillRect(head.x * cellSize + 1, head.y * cellSize + 1, cellSize - 2, cellSize - 2);
-        ctx.restore();
-
-        // Augen auf dem Kopf
-        this._drawEyes(ctx, head, cellSize);
-
-        // Körper mit Gradient von hell zu dunkel
-        for (let i = 1; i < len; i++) {
+        // Körpersegmente (von hinten nach vorne zeichnen für korrekte Überlappung)
+        for (let i = len - 1; i >= 1; i--) {
             const seg = this.body[i];
-            const t = i / Math.max(len - 1, 1);
+            const t = i / len; // 0 = Kopf, 1 = Schwanz
 
-            // Farbe interpolieren
-            const r = Math.round(lerp(0, 0, t));
-            const g = Math.round(lerp(204, 77, t));
-            const b = Math.round(lerp(51, 26, t));
+            // Gradient: helles Grün am Kopf, dunkles Grün am Schwanz
+            const r = Math.floor(0 + t * 0);
+            const g = Math.floor(255 - t * 180);
+            const b = Math.floor(65 - t * 50);
 
-            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            const x = seg.x * cellSize;
+            const y = seg.y * cellSize;
+            const padding = 1;
 
-            // Leichtes Pulsieren der Segmente
-            const pulse = Math.sin(time * 0.003 + i * 0.3) * 0.5;
-            const pad = 1 + pulse;
+            // Äußeres Segment
+            ctx.fillStyle = `rgb(${Math.floor(r * 0.4)}, ${Math.floor(g * 0.4)}, ${Math.floor(b * 0.4)})`;
+            ctx.fillRect(x + padding, y + padding, cellSize - padding * 2, cellSize - padding * 2);
 
-            ctx.fillRect(
-                seg.x * cellSize + pad,
-                seg.y * cellSize + pad,
-                cellSize - pad * 2,
-                cellSize - pad * 2
-            );
-        }
-    }
-
-    /**
-     * Zeichnet die Augen der Schlange basierend auf der Bewegungsrichtung.
-     */
-    _drawEyes(ctx, head, cellSize) {
-        const cx = head.x * cellSize + cellSize / 2;
-        const cy = head.y * cellSize + cellSize / 2;
-        const eyeSize = cellSize * 0.12;
-        const eyeOffset = cellSize * 0.2;
-        const pupilSize = eyeSize * 0.6;
-
-        let e1x, e1y, e2x, e2y, px, py;
-
-        if (this.direction.x === 1) { // Rechts
-            e1x = cx + eyeOffset; e1y = cy - eyeOffset;
-            e2x = cx + eyeOffset; e2y = cy + eyeOffset;
-            px = eyeSize * 0.3; py = 0;
-        } else if (this.direction.x === -1) { // Links
-            e1x = cx - eyeOffset; e1y = cy - eyeOffset;
-            e2x = cx - eyeOffset; e2y = cy + eyeOffset;
-            px = -eyeSize * 0.3; py = 0;
-        } else if (this.direction.y === -1) { // Oben
-            e1x = cx - eyeOffset; e1y = cy - eyeOffset;
-            e2x = cx + eyeOffset; e2y = cy - eyeOffset;
-            px = 0; py = -eyeSize * 0.3;
-        } else { // Unten
-            e1x = cx - eyeOffset; e1y = cy + eyeOffset;
-            e2x = cx + eyeOffset; e2y = cy + eyeOffset;
-            px = 0; py = eyeSize * 0.3;
+            // Inneres Segment (heller)
+            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+            ctx.fillRect(x + padding + 2, y + padding + 2, cellSize - padding * 2 - 4, cellSize - padding * 2 - 4);
         }
 
-        // Weiße Augäpfel
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(e1x, e1y, eyeSize, 0, Math.PI * 2);
-        ctx.arc(e2x, e2y, eyeSize, 0, Math.PI * 2);
-        ctx.fill();
+        // Kopf zeichnen (mit Glow-Effekt)
+        if (len > 0) {
+            const head = this.body[0];
+            const hx = head.x * cellSize;
+            const hy = head.y * cellSize;
 
-        // Schwarze Pupillen
-        ctx.fillStyle = '#000000';
-        ctx.beginPath();
-        ctx.arc(e1x + px, e1y + py, pupilSize, 0, Math.PI * 2);
-        ctx.arc(e2x + px, e2y + py, pupilSize, 0, Math.PI * 2);
-        ctx.fill();
+            // Glow
+            ctx.shadowColor = Config.COLORS.neonGreen;
+            ctx.shadowBlur = 8;
+
+            // Kopf-Hintergrund
+            ctx.fillStyle = '#003311';
+            ctx.fillRect(hx + 1, hy + 1, cellSize - 2, cellSize - 2);
+
+            // Kopf-Inneres
+            ctx.fillStyle = Config.COLORS.snakeHead;
+            ctx.fillRect(hx + 3, hy + 3, cellSize - 6, cellSize - 6);
+
+            // Augen
+            const eyeSize = Math.max(2, cellSize / 8);
+            ctx.fillStyle = '#000';
+            const dirs = {
+                up: [{ ex: hx + 5, ey: hy + 5 }, { ex: hx + cellSize - 5 - eyeSize, ey: hy + 5 }],
+                down: [{ ex: hx + 5, ey: hy + cellSize - 5 - eyeSize }, { ex: hx + cellSize - 5 - eyeSize, ey: hy + cellSize - 5 - eyeSize }],
+                left: [{ ex: hx + 5, ey: hy + 5 }, { ex: hx + 5, ey: hy + cellSize - 5 - eyeSize }],
+                right: [{ ex: hx + cellSize - 5 - eyeSize, ey: hy + 5 }, { ex: hx + cellSize - 5 - eyeSize, ey: hy + cellSize - 5 - eyeSize }],
+            };
+            const eyes = dirs[this.direction] || dirs.right;
+            eyes.forEach(e => ctx.fillRect(e.ex, e.ey, eyeSize, eyeSize));
+
+            ctx.shadowBlur = 0;
+        }
     }
-
-    get length() {
-        return this.body.length;
-    }
-
-    get headPos() {
-        return this.body[0];
-    }
-}
-
-/**
- * Lineare Interpolation zwischen zwei Werten.
- */
-function lerp(a, b, t) {
-    return a + (b - a) * t;
-}
+};

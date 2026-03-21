@@ -1,105 +1,91 @@
-# Snake - Retro Arcade Web Edition 🐍
+# Snake - Retro Arcade Edition (Web Version 2.0)
 
-Eine moderne Web-Umsetzung des klassischen Snake-Spiels mit Retro-Neon-Ästhetik, inspiriert von der C64/Amiga-Ära.
+Ein klassisches Snake-Spiel im Browser — mit Retro-Ästhetik, Neon-Glow-Effekten und modernem Gameplay.
 
 ## Features
 
 ### Spielmechanik
-- **3 Schwierigkeitsgrade**: Leicht, Mittel, Schwer – mit unterschiedlichen Geschwindigkeiten
-- **Level-System**: 3 Level mit progressiven Hindernismustern
-- **Siegbedingung**: Erreiche die maximale Punktzahl, um das Spiel zu gewinnen
-- **Bonus-Futter**: Seltene Bonus-Nahrung mit dreifacher Punktzahl (★)
-- **Wrap-Around-Modus**: Optionaler Modus, bei dem die Schlange durch Wände hindurchgeht
-- **Geschwindigkeitssteigerung**: Das Spiel wird mit steigendem Score schneller
+- **3 Schwierigkeitsgrade:** Leicht, Mittel, Schwer (beeinflusst die Startgeschwindigkeit)
+- **3 Level mit Hindernissen:** Fortschreitende Schwierigkeit mit programmatisch generierten Hindernismustern
+- **Siegbedingung:** Erreiche 30 Punkte, um das Spiel zu gewinnen
+- **Geschwindigkeitssteigerung:** Alle 5 Punkte wird das Spiel schneller
+- **Wrap-Around-Modus:** Optional — die Schlange geht durch die Wand und erscheint auf der anderen Seite
+
+### Steuerung
+| Aktion | Tastatur | Mobil |
+|--------|----------|-------|
+| Bewegen | Pfeiltasten / WASD | Swipe / D-Pad |
+| Pause | P / Escape | Tippen / D-Pad Mitte |
+| Gitter ein/aus | G | — |
+| Wrap-Around | V | — |
+| CRT-Effekt | C | — |
+| Ton ein/aus | M | — |
 
 ### Visuelle Effekte
-- **Neon-Glow-Design**: Leuchtende Farben auf dunklem Hintergrund
-- **Schlangen-Gradient**: Farbverlauf vom Kopf bis zum Schwanz
-- **Schlangen-Augen**: Dynamische Augen, die der Bewegungsrichtung folgen
-- **Pulsierendes Futter**: Animiertes Futter mit Glow-Effekt
-- **Partikeleffekte**: Beim Fressen von Nahrung
-- **Floating-Text**: Punkteanzeige beim Fressen (+1, +3)
-- **Bildschirm-Shake**: Bei Game Over
-- **CRT-Scanline-Overlay**: Umschaltbarer Retro-Monitor-Effekt
-- **Gitter-Anzeige**: Optionales Spielfeld-Raster
+- **Neon-Glow-Ästhetik:** Dunkler Hintergrund mit leuchtenden Neon-Farben
+- **Gradient-Schlange:** Farbverlauf vom Kopf bis zum Schwanz
+- **Pulsierendes Futter:** Animierter Glow-Effekt
+- **Partikel-Effekte:** Beim Fressen und beim Tod
+- **Screen-Shake:** Bildschirmerschütterung beim Game-Over
+- **CRT-Scanlines:** Optionaler Retro-Monitor-Effekt mit Vignette
+- **Animierter Startbildschirm:** Mit wandernden Neon-Punkten
 
 ### Audio
-- **Synthesierte Sounds**: Alle Sounds werden per Web Audio API in Echtzeit erzeugt
-- **Ess-Sound**: Aufsteigender Chirp beim Fressen
-- **Level-Up-Fanfare**: Aufsteigende Arpeggio-Noten
-- **Game-Over-Sound**: Absteigender, dramatischer Ton
-- **Victory-Fanfare**: Triumphale Melodie
-- **Menü-Sounds**: Blip-Töne bei Navigation
+- **Synthesierte Sounds:** Alle Klänge werden per Web Audio API in Echtzeit erzeugt — keine externen Dateien
+- **Sound-Effekte für:** Fressen, Tod, Sieg, Level-Up, Spielstart, Menü-Navigation
 
-### Technisch
-- **Reines Vanilla JS**: Keine externen Abhängigkeiten
-- **Canvas-basiertes Rendering**: Flüssige 60fps mit requestAnimationFrame
-- **Responsive Design**: Funktioniert auf Desktop und Mobilgeräten
-- **Touch-Unterstützung**: Swipe-Gesten und On-Screen D-Pad
-- **LocalStorage Highscores**: Persistente Bestenliste
-- **Modularer Code**: Saubere Aufteilung in 8 JS-Module
+### Highscores
+- **Persistente Bestenliste:** Top 10, gespeichert im localStorage des Browsers
+- **Namenseingabe:** Nach jedem neuen Highscore
 
-## Steuerung
+### HUD (Head-Up Display)
+- Aktuelle Punktzahl
+- Level-Anzeige
+- Geschwindigkeitsindikator (in Prozent)
+- Schlangenlänge
 
-### Tastatur
-| Taste | Aktion |
-|-------|--------|
-| ↑ ↓ ← → / W A S D | Schlange steuern |
-| P / Escape | Pause ein/aus |
-| G | Gitter ein/aus |
-| M | Sound ein/aus |
-| C | CRT-Effekt ein/aus |
-| R | Neustart (nach Game Over) |
-| Q | Zurück zum Menü (nach Game Over) |
-| 1 / 2 / 3 | Schwierigkeit wählen (im Menü) |
-| W | Wrap-Around ein/aus (im Menü) |
-| Enter / Leertaste | Bestätigen / Spiel starten |
+## Technische Details
 
-### Touch / Mobil
-- **Swipe**: In die gewünschte Richtung wischen
-- **D-Pad**: Richtungstasten auf dem Bildschirm
-- **Tap**: Pause / Bestätigen
+- **Reines Vanilla JavaScript** — keine externen Abhängigkeiten
+- **Canvas-basiertes Rendering** mit `requestAnimationFrame`
+- **Fester Zeitschritt** für konsistente Spielgeschwindigkeit
+- **Modulare Architektur:** 8 separate JS-Dateien für klare Trennung
+- **Responsive Design:** Skaliert automatisch auf verschiedene Bildschirmgrößen
+- **Touch-Unterstützung:** Swipe-Gesten und On-Screen D-Pad
+- **O(1) Kollisionserkennung:** Set-basiert statt Listen-Iteration
+- **Google Font:** "Press Start 2P" für authentischen Retro-Look
 
-## Dateistruktur
-
+### Dateistruktur
 ```
 snake-web/
 ├── index.html          Hauptseite
 ├── css/
-│   └── style.css       Retro-Neon-Theme
+│   └── style.css       Retro Dark Theme
 ├── js/
-│   ├── config.js       Konstanten, Schwierigkeitsgrade, Level
-│   ├── audio.js        Web Audio API Sound-Synthese
-│   ├── input.js        Tastatur, Touch, Swipe-Steuerung
-│   ├── snake.js        Schlangen-Entity und Rendering
-│   ├── food.js         Futter-Spawning und Animation
-│   ├── effects.js      Partikel, Shake, CRT-Overlay
+│   ├── config.js       Konstanten & Level-Daten
+│   ├── audio.js        Web Audio API Synthese
+│   ├── input.js        Tastatur, Touch, D-Pad
+│   ├── snake.js        Schlangen-Entität
+│   ├── food.js         Futter-System
+│   ├── effects.js      Partikel, Shake, CRT
 │   ├── ui.js           Menüs, HUD, Highscores
-│   └── game.js         Game-Loop und Zustandsverwaltung
+│   └── game.js         Haupt-Spiellogik
 └── README.md           Diese Datei
 ```
 
 ## Starten
 
-Einfach `index.html` in einem modernen Webbrowser öffnen. Es wird kein Webserver benötigt.
+Einfach `index.html` in einem modernen Browser öffnen. Kein Server, kein Build-Schritt erforderlich.
 
 ```bash
 # Oder mit einem lokalen Server:
-python3 -m http.server 8000
-# Dann im Browser: http://localhost:8000
+python3 -m http.server 8080 --directory snake-web/
+# Dann http://localhost:8080 aufrufen
 ```
-
-## Technische Details
-
-- **Game Loop**: Tick-basierte Spiellogik mit variabler Frame-Rate-Zeichnung
-- **Kollisionserkennung**: O(1) dank Set-basierter Positionsprüfung
-- **Input-Buffering**: Richtungswarteschlange verhindert verlorene Eingaben bei schnellem Spielen
-- **Futter-Spawning**: Berechnet alle freien Felder und wählt zufällig (keine Endlosschleife möglich)
-- **Level-Generierung**: Programmatisch generierte Hindernismuster mit Spawn-Schutzzone
 
 ## Credits
 
-- **Design & Konzept**: Oliver
-- **Web-Umsetzung**: AI Pair Programming (Claude)
-- **Font**: [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P) von CodeMan38
-- **Basierend auf**: Snake_v0.3.py (Python/Pygame Original)
+- **Design & Konzept:** Oliver
+- **Web-Portierung & Erweiterungen:** AI Pair Programming
+- **Font:** "Press Start 2P" von CodeMan38 (Google Fonts)
+- **Inspiration:** Klassische Snake-Spiele auf C64, Amiga und Nokia-Handys

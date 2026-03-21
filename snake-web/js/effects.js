@@ -1,37 +1,51 @@
 /**
- * effects.js - Partikeleffekte, Bildschirm-Shake, CRT-Overlay und Animationen
+ * Snake Game - Visuelle Effekte
+ * Partikel, Screen-Shake, CRT-Scanlines, Animationen
  */
 
-class ParticleSystem {
-    constructor() {
-        this.particles = [];
-    }
+const Effects = {
+    particles: [],
+    shakeOffset: { x: 0, y: 0 },
+    _shakeTimer: 0,
+    _shakeIntensity: 0,
 
-    /**
-     * Erzeugt Partikel an einer Position (z.B. beim Fressen).
-     */
-    emit(x, y, color, count) {
-        count = count || CONFIG.PARTICLE_COUNT;
+    // --- Partikel-System ---
+
+    spawnParticles(x, y, color, count) {
+        count = count || Config.PARTICLE_COUNT;
         for (let i = 0; i < count; i++) {
             const angle = (Math.PI * 2 / count) * i + Math.random() * 0.5;
-            const speed = CONFIG.PARTICLE_SPEED * (0.5 + Math.random());
+            const speed = Config.PARTICLE_SPEED * (0.5 + Math.random());
             this.particles.push({
-                x,
-                y,
+                x: x,
+                y: y,
                 vx: Math.cos(angle) * speed,
                 vy: Math.sin(angle) * speed,
-                life: CONFIG.PARTICLE_LIFETIME,
-                maxLife: CONFIG.PARTICLE_LIFETIME,
-                color,
+                life: Config.PARTICLE_LIFETIME,
+                maxLife: Config.PARTICLE_LIFETIME,
+                color: color || Config.COLORS.neonGreen,
                 size: 2 + Math.random() * 3,
             });
         }
-    }
+    },
 
-    /**
-     * Aktualisiert alle Partikel.
-     */
-    update(dt) {
+    // Partikel beim Essen spawnen
+    spawnEatParticles(gridX, gridY) {
+        const px = (gridX + 0.5) * Config.CELL_SIZE;
+        const py = (gridY + 0.5) * Config.CELL_SIZE;
+        this.spawnParticles(px, py, Config.COLORS.neonPink, 10);
+        this.spawnParticles(px, py, Config.COLORS.neonYellow, 6);
+    },
+
+    // Partikel beim Tod spawnen
+    spawnDeathParticles(gridX, gridY) {
+        const px = (gridX + 0.5) * Config.CELL_SIZE;
+        const py = (gridY + 0.5) * Config.CELL_SIZE;
+        this.spawnParticles(px, py, Config.COLORS.neonPink, 20);
+        this.spawnParticles(px, py, '#ff4400', 15);
+    },
+
+    updateParticles(dt) {
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const p = this.particles[i];
             p.x += p.vx * (dt / 16);
@@ -43,167 +57,121 @@ class ParticleSystem {
                 this.particles.splice(i, 1);
             }
         }
-    }
+    },
 
-    /**
-     * Zeichnet alle Partikel.
-     */
-    draw(ctx) {
+    drawParticles(ctx) {
         this.particles.forEach(p => {
             const alpha = Math.max(0, p.life / p.maxLife);
-            ctx.save();
             ctx.globalAlpha = alpha;
             ctx.shadowColor = p.color;
-            ctx.shadowBlur = 8;
+            ctx.shadowBlur = 6;
             ctx.fillStyle = p.color;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
+            ctx.fillRect(
+                p.x - p.size / 2,
+                p.y - p.size / 2,
+                p.size * alpha,
+                p.size * alpha
+            );
         });
-    }
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+    },
 
+    // --- Screen-Shake ---
+
+    triggerShake(intensity, duration) {
+        this._shakeIntensity = intensity || Config.SHAKE_INTENSITY;
+        this._shakeTimer = duration || Config.SHAKE_DURATION;
+    },
+
+    updateShake(dt) {
+        if (this._shakeTimer > 0) {
+            this._shakeTimer -= dt;
+            const factor = this._shakeTimer / Config.SHAKE_DURATION;
+            const intensity = this._shakeIntensity * factor;
+            this.shakeOffset.x = (Math.random() - 0.5) * intensity * 2;
+            this.shakeOffset.y = (Math.random() - 0.5) * intensity * 2;
+        } else {
+            this.shakeOffset.x = 0;
+            this.shakeOffset.y = 0;
+        }
+    },
+
+    // --- CRT-Scanline-Effekt ---
+
+    drawScanlines(ctx, width, height) {
+        ctx.fillStyle = `rgba(0, 0, 0, ${Config.SCANLINE_OPACITY})`;
+        for (let y = 0; y < height; y += 3) {
+            ctx.fillRect(0, y, width, 1);
+        }
+        // Leichter Vignette-Effekt an den Rändern
+        const gradient = ctx.createRadialGradient(
+            width / 2, height / 2, width * 0.3,
+            width / 2, height / 2, width * 0.7
+        );
+        gradient.addColorStop(0, 'transparent');
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+    },
+
+    // --- Grid-Zeichnung ---
+
+    drawGrid(ctx, cellSize) {
+        ctx.strokeStyle = Config.COLORS.grid;
+        ctx.lineWidth = 0.5;
+        for (let x = 0; x <= Config.CANVAS_WIDTH; x += cellSize) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, Config.CANVAS_HEIGHT);
+            ctx.stroke();
+        }
+        for (let y = 0; y <= Config.CANVAS_HEIGHT; y += cellSize) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(Config.CANVAS_WIDTH, y);
+            ctx.stroke();
+        }
+    },
+
+    // --- Hindernisse zeichnen ---
+
+    drawObstacles(ctx, obstacles, cellSize, time) {
+        obstacles.forEach(o => {
+            const x = o.x * cellSize;
+            const y = o.y * cellSize;
+
+            // Äußerer Block
+            ctx.fillStyle = Config.COLORS.obstacle;
+            ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+
+            // Innerer Highlight
+            ctx.fillStyle = Config.COLORS.obstacleHighlight;
+            ctx.fillRect(x + 3, y + 3, cellSize - 6, cellSize - 6);
+
+            // Muster (Gitterlinien im Block)
+            ctx.strokeStyle = 'rgba(100, 100, 130, 0.3)';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(x + 1, y + cellSize / 2);
+            ctx.lineTo(x + cellSize - 1, y + cellSize / 2);
+            ctx.moveTo(x + cellSize / 2, y + 1);
+            ctx.lineTo(x + cellSize / 2, y + cellSize - 1);
+            ctx.stroke();
+        });
+    },
+
+    // Alle Effekte updaten
+    update(dt) {
+        this.updateParticles(dt);
+        this.updateShake(dt);
+    },
+
+    // Alle Partikel löschen
     clear() {
         this.particles = [];
+        this._shakeTimer = 0;
+        this.shakeOffset.x = 0;
+        this.shakeOffset.y = 0;
     }
-}
-
-class ScreenShake {
-    constructor() {
-        this.intensity = 0;
-        this.duration = 0;
-        this.elapsed = 0;
-        this.offsetX = 0;
-        this.offsetY = 0;
-    }
-
-    /**
-     * Startet einen Bildschirm-Shake-Effekt.
-     */
-    trigger(intensity, duration) {
-        this.intensity = intensity || CONFIG.SHAKE_INTENSITY;
-        this.duration = duration || CONFIG.SHAKE_DURATION;
-        this.elapsed = 0;
-    }
-
-    /**
-     * Aktualisiert den Shake-Effekt.
-     */
-    update(dt) {
-        if (this.elapsed >= this.duration) {
-            this.offsetX = 0;
-            this.offsetY = 0;
-            return;
-        }
-        this.elapsed += dt;
-        const progress = this.elapsed / this.duration;
-        const decay = 1 - progress;
-        this.offsetX = (Math.random() - 0.5) * 2 * this.intensity * decay;
-        this.offsetY = (Math.random() - 0.5) * 2 * this.intensity * decay;
-    }
-
-    get active() {
-        return this.elapsed < this.duration;
-    }
-}
-
-class CRTEffect {
-    constructor() {
-        this.enabled = false;
-        this._canvas = null;
-        this._ctx = null;
-    }
-
-    /**
-     * Erstellt das Scanline-Overlay einmalig.
-     */
-    init(width, height) {
-        this._canvas = document.createElement('canvas');
-        this._canvas.width = width;
-        this._canvas.height = height;
-        this._ctx = this._canvas.getContext('2d');
-
-        // Scanlines zeichnen
-        this._ctx.clearRect(0, 0, width, height);
-        for (let y = 0; y < height; y += 2) {
-            this._ctx.fillStyle = CONFIG.COLORS.SCANLINE;
-            this._ctx.fillRect(0, y, width, 1);
-        }
-    }
-
-    toggle() {
-        this.enabled = !this.enabled;
-        return this.enabled;
-    }
-
-    /**
-     * Zeichnet das CRT-Overlay.
-     */
-    draw(ctx) {
-        if (!this.enabled || !this._canvas) return;
-        ctx.drawImage(this._canvas, 0, 0);
-
-        // Leichter Vignette-Effekt
-        const w = ctx.canvas.width;
-        const h = ctx.canvas.height;
-        const gradient = ctx.createRadialGradient(w / 2, h / 2, w * 0.3, w / 2, h / 2, w * 0.7);
-        gradient.addColorStop(0, 'rgba(0,0,0,0)');
-        gradient.addColorStop(1, 'rgba(0,0,0,0.3)');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, w, h);
-    }
-}
-
-/**
- * Floating-Text-Effekt (z.B. "+1" beim Fressen)
- */
-class FloatingTexts {
-    constructor() {
-        this.texts = [];
-    }
-
-    add(x, y, text, color) {
-        this.texts.push({
-            x, y, text, color,
-            life: 800,
-            maxLife: 800,
-            vy: -1.5,
-        });
-    }
-
-    update(dt) {
-        for (let i = this.texts.length - 1; i >= 0; i--) {
-            const t = this.texts[i];
-            t.y += t.vy * (dt / 16);
-            t.life -= dt;
-            if (t.life <= 0) {
-                this.texts.splice(i, 1);
-            }
-        }
-    }
-
-    draw(ctx) {
-        this.texts.forEach(t => {
-            const alpha = Math.max(0, t.life / t.maxLife);
-            ctx.save();
-            ctx.globalAlpha = alpha;
-            ctx.fillStyle = t.color;
-            ctx.font = '10px "Press Start 2P", monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.shadowColor = t.color;
-            ctx.shadowBlur = 6;
-            ctx.fillText(t.text, t.x, t.y);
-            ctx.restore();
-        });
-    }
-
-    clear() {
-        this.texts = [];
-    }
-}
-
-const particles = new ParticleSystem();
-const screenShake = new ScreenShake();
-const crtEffect = new CRTEffect();
-const floatingTexts = new FloatingTexts();
+};

@@ -1,386 +1,378 @@
 /**
- * ui.js - Menüs, HUD, Highscores und Startbildschirm
+ * Snake Game - UI-System
+ * Startbildschirm, HUD, Game-Over, Highscores, Namenseingabe
  */
 
-class UI {
-    constructor() {
-        this.highscores = this._loadHighscores();
-        this.nameInput = '';
-        this.selectedDifficulty = 2;
-        this.wrapAround = false;
-        this.titleWave = 0;
-    }
-
-    // --- Highscore-Verwaltung ---
-
-    _loadHighscores() {
-        try {
-            const data = localStorage.getItem(CONFIG.STORAGE_KEY);
-            return data ? JSON.parse(data) : [];
-        } catch (e) {
-            return [];
-        }
-    }
-
-    _saveHighscores() {
-        try {
-            localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(this.highscores));
-        } catch (e) {
-            console.warn('Highscores konnten nicht gespeichert werden:', e);
-        }
-    }
-
-    addHighscore(name, score, difficulty) {
-        this.highscores.push({
-            name: name || 'Anonym',
-            score,
-            difficulty,
-            date: new Date().toLocaleDateString('de-DE'),
-        });
-        this.highscores.sort((a, b) => b.score - a.score);
-        this.highscores = this.highscores.slice(0, CONFIG.MAX_HIGHSCORES);
-        this._saveHighscores();
-    }
-
-    isHighscore(score) {
-        return this.highscores.length < CONFIG.MAX_HIGHSCORES ||
-               score > (this.highscores[this.highscores.length - 1]?.score || 0);
-    }
+const UI = {
+    _titlePhase: 0,
+    _selectedDifficulty: 2,
+    _nameInput: '',
+    _cursorBlink: 0,
+    _startAnimPhase: 0,
 
     // --- Startbildschirm ---
 
-    drawStartScreen(ctx, w, h, time) {
-        ctx.clearRect(0, 0, w, h);
-        ctx.fillStyle = CONFIG.COLORS.BG;
-        ctx.fillRect(0, 0, w, h);
+    drawStartScreen(ctx, time) {
+        const W = Config.CANVAS_WIDTH;
+        const H = Config.CANVAS_HEIGHT;
 
-        // Animierter Titel
-        this._drawAnimatedTitle(ctx, w, h, time);
+        ctx.fillStyle = Config.COLORS.background;
+        ctx.fillRect(0, 0, W, H);
+
+        // Animierter Hintergrund - wandernde Punkte
+        this._startAnimPhase += 0.002;
+        ctx.fillStyle = 'rgba(0, 255, 65, 0.03)';
+        for (let i = 0; i < 50; i++) {
+            const px = (Math.sin(i * 1.3 + this._startAnimPhase) * 0.5 + 0.5) * W;
+            const py = (Math.cos(i * 0.7 + this._startAnimPhase * 0.5) * 0.5 + 0.5) * H;
+            ctx.fillRect(px, py, 3, 3);
+        }
+
+        // Titel mit Neon-Glow
+        this._titlePhase += 0.03;
+        const glowIntensity = 10 + Math.sin(this._titlePhase) * 5;
+
+        ctx.save();
+        ctx.shadowColor = Config.COLORS.neonGreen;
+        ctx.shadowBlur = glowIntensity;
+        ctx.font = '28px "Press Start 2P", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = Config.COLORS.neonGreen;
+        ctx.fillText('SNAKE', W / 2, 80);
+        ctx.font = '10px "Press Start 2P", monospace';
+        ctx.fillStyle = Config.COLORS.textDim;
+        ctx.shadowBlur = 3;
+        ctx.fillText('v2.0 WEB EDITION', W / 2, 105);
+        ctx.restore();
+
+        // ASCII-Schlange Animation
+        ctx.font = '10px "Press Start 2P", monospace';
+        ctx.fillStyle = Config.COLORS.neonGreen;
+        const snakeArt = '~~~~~@>';
+        const offset = Math.floor(time / 200) % 3;
+        ctx.fillText(' '.repeat(offset) + snakeArt, W / 2, 135);
 
         // Schwierigkeitsauswahl
-        const diffY = h * 0.45;
-        ctx.font = '10px "Press Start 2P", monospace';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = CONFIG.COLORS.TEXT_DIM;
-        ctx.fillText('SCHWIERIGKEIT WÄHLEN', w / 2, diffY);
+        ctx.font = '11px "Press Start 2P", monospace';
+        ctx.fillStyle = Config.COLORS.textBright;
+        ctx.fillText('SCHWIERIGKEIT', W / 2, 175);
 
-        [1, 2, 3].forEach((d, i) => {
-            const dy = diffY + 30 + i * 28;
-            const diff = CONFIG.DIFFICULTIES[d];
-            const selected = d === this.selectedDifficulty;
+        const difficulties = [
+            { key: 1, label: 'LEICHT', color: '#00ff41' },
+            { key: 2, label: 'MITTEL', color: '#ffcc00' },
+            { key: 3, label: 'SCHWER', color: '#ff0040' },
+        ];
 
-            ctx.font = selected ? '11px "Press Start 2P", monospace' : '9px "Press Start 2P", monospace';
-            ctx.fillStyle = selected ? diff.color : CONFIG.COLORS.TEXT_DIM;
+        difficulties.forEach((d, i) => {
+            const y = 205 + i * 32;
+            const selected = this._selectedDifficulty === d.key;
 
             if (selected) {
-                ctx.shadowColor = diff.color;
-                ctx.shadowBlur = 10;
+                ctx.shadowColor = d.color;
+                ctx.shadowBlur = 8;
+                ctx.fillStyle = d.color;
+                ctx.font = '11px "Press Start 2P", monospace';
+                ctx.fillText('> ' + d.label + ' <', W / 2, y);
+                ctx.shadowBlur = 0;
+            } else {
+                ctx.fillStyle = Config.COLORS.textDim;
+                ctx.font = '10px "Press Start 2P", monospace';
+                ctx.fillText(d.label, W / 2, y);
             }
-
-            const prefix = selected ? '► ' : '  ';
-            ctx.fillText(`${prefix}${d} - ${diff.name}`, w / 2, dy);
-            ctx.shadowBlur = 0;
         });
-
-        // Wrap-Around Option
-        const wrapY = diffY + 30 + 3 * 28 + 15;
-        ctx.font = '8px "Press Start 2P", monospace';
-        ctx.fillStyle = this.wrapAround ? CONFIG.COLORS.NEON_BLUE : CONFIG.COLORS.TEXT_DIM;
-        ctx.fillText(`[W] Wrap-Around: ${this.wrapAround ? 'AN' : 'AUS'}`, w / 2, wrapY);
 
         // Steuerung
-        const ctrlY = h * 0.78;
-        ctx.font = '7px "Press Start 2P", monospace';
-        ctx.fillStyle = CONFIG.COLORS.TEXT_DIM;
+        ctx.font = '8px "Press Start 2P", monospace';
+        ctx.fillStyle = Config.COLORS.textDim;
         const controls = [
-            '↑↓←→ / WASD  Steuern',
-            'P / ESC       Pause',
-            'G  Gitter   M  Sound',
-            'C  CRT-Effekt',
+            'PFEILTASTEN / WASD - BEWEGEN',
+            'P / ESC - PAUSE',
+            'G - GITTER  |  V - WRAPAROUND',
+            'C - CRT EFFEKT  |  M - TON',
         ];
         controls.forEach((line, i) => {
-            ctx.fillText(line, w / 2, ctrlY + i * 16);
+            ctx.fillText(line, W / 2, 310 + i * 18);
         });
 
-        // Start-Hinweis
-        const blink = Math.sin(time * 0.004) > 0;
-        if (blink) {
+        // Start-Hinweis (blinkend)
+        if (Math.floor(time / 500) % 2 === 0) {
             ctx.font = '10px "Press Start 2P", monospace';
-            ctx.fillStyle = CONFIG.COLORS.NEON_YELLOW;
-            ctx.shadowColor = CONFIG.COLORS.NEON_YELLOW;
-            ctx.shadowBlur = 15;
-            ctx.fillText('ENTER / TAP ZUM STARTEN', w / 2, h * 0.93);
+            ctx.shadowColor = Config.COLORS.neonGreen;
+            ctx.shadowBlur = 6;
+            ctx.fillStyle = Config.COLORS.neonGreen;
+            ctx.fillText('ENTER / 1-3 ZUM STARTEN', W / 2, H - 50);
             ctx.shadowBlur = 0;
         }
-    }
 
-    _drawAnimatedTitle(ctx, w, h, time) {
-        const title = 'SNAKE';
-        const titleY = h * 0.18;
-        ctx.font = '36px "Press Start 2P", monospace';
-        ctx.textAlign = 'center';
+        // Credits
+        ctx.font = '7px "Press Start 2P", monospace';
+        ctx.fillStyle = 'rgba(0, 255, 65, 0.3)';
+        ctx.fillText('DESIGNED BY OLIVER', W / 2, H - 15);
+    },
 
-        // Buchstaben einzeln mit Wellen-Effekt
-        const totalWidth = ctx.measureText(title).width;
-        let x = w / 2 - totalWidth / 2;
-
-        for (let i = 0; i < title.length; i++) {
-            const charWidth = ctx.measureText(title[i]).width;
-            const wave = Math.sin(time * CONFIG.TITLE_WAVE_SPEED + i * 0.8) * 8;
-
-            // Neon-Glow
-            ctx.save();
-            ctx.shadowColor = CONFIG.COLORS.SNAKE_HEAD;
-            ctx.shadowBlur = 20 + Math.sin(time * 0.002 + i) * 5;
-            ctx.fillStyle = CONFIG.COLORS.SNAKE_HEAD;
-            ctx.textAlign = 'left';
-            ctx.fillText(title[i], x, titleY + wave);
-            ctx.restore();
-
-            x += charWidth;
+    // Menü-Navigation
+    navigateMenu(direction) {
+        if (direction === 'up') {
+            this._selectedDifficulty = Math.max(1, this._selectedDifficulty - 1);
+        } else if (direction === 'down') {
+            this._selectedDifficulty = Math.min(3, this._selectedDifficulty + 1);
         }
+    },
 
-        // Untertitel
-        ctx.font = '8px "Press Start 2P", monospace';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = CONFIG.COLORS.TEXT_DIM;
-        ctx.fillText('WEB EDITION v1.0', w / 2, titleY + 25);
-    }
+    getSelectedDifficulty() {
+        return this._selectedDifficulty;
+    },
 
-    // --- HUD (Heads-Up Display) ---
+    setSelectedDifficulty(d) {
+        if (d >= 1 && d <= 3) this._selectedDifficulty = d;
+    },
 
-    drawHUD(ctx, w, h, state) {
-        const pad = 8;
-        const fontSize = 9;
-        ctx.font = `${fontSize}px "Press Start 2P", monospace`;
+    // --- HUD (Head-Up Display) ---
+
+    drawHUD(ctx, state) {
+        const W = Config.CANVAS_WIDTH;
+        const cs = Config.CELL_SIZE;
+
+        // Semi-transparenter HUD-Hintergrund oben
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillRect(0, 0, W, 28);
+        ctx.strokeStyle = 'rgba(0, 255, 65, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, 28);
+        ctx.lineTo(W, 28);
+        ctx.stroke();
+
+        ctx.font = '9px "Press Start 2P", monospace';
         ctx.textAlign = 'left';
-
-        // Obere Leiste - Score
-        ctx.fillStyle = CONFIG.COLORS.NEON_YELLOW;
-        ctx.shadowColor = CONFIG.COLORS.NEON_YELLOW;
-        ctx.shadowBlur = 4;
-        ctx.fillText(`PUNKTE: ${state.score}`, pad, pad + fontSize);
-        ctx.shadowBlur = 0;
-
-        // Level
-        ctx.fillStyle = CONFIG.COLORS.NEON_BLUE;
-        ctx.fillText(`LEVEL: ${state.level + 1}`, pad, pad + fontSize * 2 + 4);
-
-        // Schlangenlänge
-        ctx.fillStyle = CONFIG.COLORS.SNAKE_HEAD;
-        ctx.fillText(`LÄNGE: ${state.snakeLength}`, pad, pad + fontSize * 3 + 8);
-
-        // Rechte Seite - Geschwindigkeit
-        ctx.textAlign = 'right';
-        const speedPct = Math.round((1 - (state.speed - CONFIG.MIN_SPEED) / (200 - CONFIG.MIN_SPEED)) * 100);
-        ctx.fillStyle = this._speedColor(speedPct);
-        ctx.fillText(`SPEED: ${speedPct}%`, w - pad, pad + fontSize);
-
-        // Schwierigkeit
-        const diff = CONFIG.DIFFICULTIES[state.difficulty];
-        ctx.fillStyle = diff.color;
-        ctx.fillText(diff.name.toUpperCase(), w - pad, pad + fontSize * 2 + 4);
-
-        // Wrap-Around-Anzeige
-        if (state.wrapAround) {
-            ctx.fillStyle = CONFIG.COLORS.NEON_BLUE;
-            ctx.fillText('WRAP', w - pad, pad + fontSize * 3 + 8);
-        }
-
-        ctx.textAlign = 'left';
-    }
-
-    _speedColor(pct) {
-        if (pct < 40) return CONFIG.COLORS.NEON_YELLOW;
-        if (pct < 70) return CONFIG.COLORS.FOOD_ALT;
-        return CONFIG.COLORS.FOOD;
-    }
-
-    // --- Pause-Bildschirm ---
-
-    drawPauseScreen(ctx, w, h, time) {
-        ctx.fillStyle = CONFIG.COLORS.OVERLAY;
-        ctx.fillRect(0, 0, w, h);
-
-        const blink = Math.sin(time * 0.004) > 0;
-
-        ctx.textAlign = 'center';
-        ctx.font = '24px "Press Start 2P", monospace';
-        ctx.fillStyle = CONFIG.COLORS.NEON_YELLOW;
-        ctx.shadowColor = CONFIG.COLORS.NEON_YELLOW;
-        ctx.shadowBlur = 15;
-        ctx.fillText('PAUSE', w / 2, h / 2 - 20);
-        ctx.shadowBlur = 0;
-
-        if (blink) {
-            ctx.font = '9px "Press Start 2P", monospace';
-            ctx.fillStyle = CONFIG.COLORS.TEXT;
-            ctx.fillText('P / ESC ZUM FORTFAHREN', w / 2, h / 2 + 25);
-        }
-    }
-
-    // --- Game Over / Victory ---
-
-    drawEndScreen(ctx, w, h, time, state) {
-        ctx.fillStyle = CONFIG.COLORS.OVERLAY;
-        ctx.fillRect(0, 0, w, h);
-
-        const isVictory = state.victory;
-        const title = isVictory ? 'SIEG!' : 'GAME OVER';
-        const titleColor = isVictory ? CONFIG.COLORS.SNAKE_HEAD : CONFIG.COLORS.FOOD;
-        const glowColor = isVictory ? CONFIG.COLORS.SNAKE_GLOW : CONFIG.COLORS.FOOD_GLOW;
-
-        // Titel
-        ctx.textAlign = 'center';
-        ctx.font = '22px "Press Start 2P", monospace';
-        ctx.fillStyle = titleColor;
-        ctx.shadowColor = glowColor;
-        ctx.shadowBlur = 20;
-        ctx.fillText(title, w / 2, h * 0.25);
-        ctx.shadowBlur = 0;
+        ctx.shadowColor = Config.COLORS.neonGreen;
+        ctx.shadowBlur = 3;
 
         // Score
-        ctx.font = '12px "Press Start 2P", monospace';
-        ctx.fillStyle = CONFIG.COLORS.NEON_YELLOW;
-        ctx.fillText(`PUNKTE: ${state.score}`, w / 2, h * 0.35);
+        ctx.fillStyle = Config.COLORS.neonYellow;
+        ctx.fillText('PUNKTE:' + state.score, 8, 18);
 
-        ctx.font = '9px "Press Start 2P", monospace';
-        ctx.fillStyle = CONFIG.COLORS.TEXT_DIM;
-        ctx.fillText(`LEVEL: ${state.level + 1}  LÄNGE: ${state.snakeLength}`, w / 2, h * 0.40);
-
-        // Highscore-Eingabe oder Highscore-Liste
-        if (state.enteringName) {
-            this._drawNameInput(ctx, w, h, time, state);
-        } else {
-            this._drawHighscoreTable(ctx, w, h);
-
-            // Neustart-Hinweis
-            const blink = Math.sin(time * 0.004) > 0;
-            if (blink) {
-                ctx.font = '8px "Press Start 2P", monospace';
-                ctx.fillStyle = CONFIG.COLORS.TEXT;
-                ctx.fillText('R = NEUSTART  Q = MENÜ', w / 2, h * 0.92);
-            }
-        }
-    }
-
-    _drawNameInput(ctx, w, h, time, state) {
-        ctx.font = '9px "Press Start 2P", monospace';
-        ctx.fillStyle = CONFIG.COLORS.TEXT;
+        // Level
+        ctx.fillStyle = Config.COLORS.neonGreen;
         ctx.textAlign = 'center';
-        ctx.fillText('NEUER HIGHSCORE!', w / 2, h * 0.50);
+        ctx.fillText('LV.' + (state.level + 1), W / 2, 18);
 
-        ctx.fillStyle = CONFIG.COLORS.NEON_YELLOW;
-        ctx.fillText('NAME EINGEBEN:', w / 2, h * 0.58);
+        // Speed + Length rechts
+        ctx.textAlign = 'right';
+        ctx.fillStyle = Config.COLORS.neonBlue;
+        const speedPct = Math.min(100, Math.floor((state.fps / Config.MAX_FPS) * 100));
+        ctx.fillText('SPD:' + speedPct + '%', W - 80, 18);
+        ctx.fillStyle = Config.COLORS.neonPink;
+        ctx.fillText('LEN:' + state.snakeLength, W - 8, 18);
 
-        // Namenseingabe mit blinkendem Cursor
-        const cursor = Math.sin(time * 0.006) > 0 ? '█' : ' ';
-        ctx.font = '12px "Press Start 2P", monospace';
-        ctx.fillStyle = CONFIG.COLORS.TEXT_BRIGHT;
-        ctx.shadowColor = CONFIG.COLORS.SNAKE_HEAD;
-        ctx.shadowBlur = 8;
-        ctx.fillText(this.nameInput + cursor, w / 2, h * 0.66);
         ctx.shadowBlur = 0;
+        ctx.textAlign = 'left';
 
-        ctx.font = '7px "Press Start 2P", monospace';
-        ctx.fillStyle = CONFIG.COLORS.TEXT_DIM;
-        ctx.fillText('ENTER = BESTÄTIGEN', w / 2, h * 0.74);
-    }
+        // Wrap-Around Indikator
+        if (state.wrapAround) {
+            ctx.font = '7px "Press Start 2P", monospace';
+            ctx.fillStyle = Config.COLORS.neonBlue;
+            ctx.textAlign = 'center';
+            ctx.fillText('WRAP', W / 2, 38);
+            ctx.textAlign = 'left';
+        }
+    },
 
-    _drawHighscoreTable(ctx, w, h) {
-        if (this.highscores.length === 0) return;
+    // --- Pause-Overlay ---
 
-        const startY = h * 0.50;
-        ctx.font = '9px "Press Start 2P", monospace';
-        ctx.fillStyle = CONFIG.COLORS.NEON_PURPLE;
+    drawPause(ctx) {
+        const W = Config.CANVAS_WIDTH;
+        const H = Config.CANVAS_HEIGHT;
+
+        ctx.fillStyle = Config.COLORS.overlay;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.save();
         ctx.textAlign = 'center';
-        ctx.fillText('HIGHSCORES', w / 2, startY);
+        ctx.shadowColor = Config.COLORS.neonGreen;
+        ctx.shadowBlur = 15;
+        ctx.font = '24px "Press Start 2P", monospace';
+        ctx.fillStyle = Config.COLORS.neonGreen;
+        ctx.fillText('PAUSE', W / 2, H / 2 - 20);
 
-        ctx.font = '7px "Press Start 2P", monospace';
-        const shown = this.highscores.slice(0, 5);
-        shown.forEach((entry, i) => {
-            const y = startY + 20 + i * 16;
-            const rank = `${i + 1}.`.padStart(3);
-            const name = entry.name.padEnd(10).slice(0, 10);
-            const score = String(entry.score).padStart(5);
-
-            ctx.fillStyle = i === 0 ? CONFIG.COLORS.NEON_YELLOW :
-                           i === 1 ? CONFIG.COLORS.TEXT_BRIGHT :
-                           i === 2 ? CONFIG.COLORS.FOOD_ALT :
-                           CONFIG.COLORS.TEXT_DIM;
-
-            ctx.fillText(`${rank} ${name} ${score}`, w / 2, y);
-        });
-    }
+        ctx.font = '9px "Press Start 2P", monospace';
+        ctx.shadowBlur = 3;
+        ctx.fillStyle = Config.COLORS.textDim;
+        ctx.fillText('P / ESC ZUM FORTSETZEN', W / 2, H / 2 + 20);
+        ctx.restore();
+    },
 
     // --- Level-Up-Anzeige ---
 
-    drawLevelUp(ctx, w, h, time, level) {
-        ctx.fillStyle = CONFIG.COLORS.OVERLAY;
-        ctx.fillRect(0, 0, w, h);
+    drawLevelUp(ctx, level) {
+        const W = Config.CANVAS_WIDTH;
+        const H = Config.CANVAS_HEIGHT;
 
+        ctx.fillStyle = Config.COLORS.overlay;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.save();
         ctx.textAlign = 'center';
-        ctx.font = '28px "Press Start 2P", monospace';
-        ctx.fillStyle = CONFIG.COLORS.NEON_BLUE;
-        ctx.shadowColor = CONFIG.COLORS.NEON_BLUE;
-        ctx.shadowBlur = 20;
-        ctx.fillText(`LEVEL ${level}`, w / 2, h / 2 - 10);
+        ctx.shadowColor = Config.COLORS.neonYellow;
+        ctx.shadowBlur = 15;
+        ctx.font = '24px "Press Start 2P", monospace';
+        ctx.fillStyle = Config.COLORS.neonYellow;
+        ctx.fillText('LEVEL ' + level, W / 2, H / 2);
+        ctx.restore();
+    },
+
+    // --- Game-Over / Victory Screen ---
+
+    drawEndScreen(ctx, type, score, time) {
+        const W = Config.CANVAS_WIDTH;
+        const H = Config.CANVAS_HEIGHT;
+
+        ctx.fillStyle = Config.COLORS.overlay;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.save();
+        ctx.textAlign = 'center';
+
+        const isVictory = type === 'victory';
+        const title = isVictory ? 'SIEG!' : 'GAME OVER';
+        const titleColor = isVictory ? Config.COLORS.neonGreen : Config.COLORS.neonPink;
+
+        // Titel
+        ctx.shadowColor = titleColor;
+        ctx.shadowBlur = 15 + Math.sin(time * 0.003) * 5;
+        ctx.font = '22px "Press Start 2P", monospace';
+        ctx.fillStyle = titleColor;
+        ctx.fillText(title, W / 2, H / 2 - 60);
+
+        // Score
+        ctx.shadowBlur = 5;
+        ctx.font = '12px "Press Start 2P", monospace';
+        ctx.fillStyle = Config.COLORS.neonYellow;
+        ctx.fillText('PUNKTE: ' + score, W / 2, H / 2 - 20);
+
+        ctx.restore();
+    },
+
+    // --- Namenseingabe ---
+
+    resetNameInput() {
+        this._nameInput = '';
+        this._cursorBlink = 0;
+    },
+
+    getNameInput() {
+        return this._nameInput || 'Anonym';
+    },
+
+    handleNameInput() {
+        const char = Input.consumeNameChar();
+        if (char && this._nameInput.length < Config.MAX_NAME_LENGTH) {
+            this._nameInput += char;
+        }
+        if (Input.consumeAction('nameBackspace')) {
+            this._nameInput = this._nameInput.slice(0, -1);
+        }
+        return Input.consumeAction('nameSubmit');
+    },
+
+    drawNameInput(ctx, time) {
+        const W = Config.CANVAS_WIDTH;
+        const H = Config.CANVAS_HEIGHT;
+
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.font = '10px "Press Start 2P", monospace';
+        ctx.fillStyle = Config.COLORS.neonGreen;
+        ctx.fillText('NAME EINGEBEN:', W / 2, H / 2 + 20);
+
+        // Eingabefeld
+        const cursor = Math.floor(time / 400) % 2 === 0 ? '_' : ' ';
+        ctx.font = '12px "Press Start 2P", monospace';
+        ctx.shadowColor = Config.COLORS.neonGreen;
+        ctx.shadowBlur = 5;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(this._nameInput + cursor, W / 2, H / 2 + 45);
         ctx.shadowBlur = 0;
 
-        ctx.font = '9px "Press Start 2P", monospace';
-        ctx.fillStyle = CONFIG.COLORS.TEXT_DIM;
-        ctx.fillText('MACH DICH BEREIT!', w / 2, h / 2 + 25);
-    }
+        ctx.font = '8px "Press Start 2P", monospace';
+        ctx.fillStyle = Config.COLORS.textDim;
+        ctx.fillText('ENTER ZUM BESTAETIGEN', W / 2, H / 2 + 70);
+        ctx.restore();
+    },
 
-    // --- Grid-Zeichnung ---
+    // --- Highscore-Anzeige ---
 
-    drawGrid(ctx, w, h) {
-        ctx.strokeStyle = CONFIG.COLORS.GRID;
-        ctx.lineWidth = 0.5;
-        const cs = CONFIG.CELL_SIZE;
+    drawHighscores(ctx, highscores, time) {
+        const W = Config.CANVAS_WIDTH;
+        const H = Config.CANVAS_HEIGHT;
 
-        for (let x = 0; x <= CONFIG.GRID_WIDTH; x++) {
-            ctx.strokeStyle = x % 5 === 0 ? CONFIG.COLORS.GRID_ACCENT : CONFIG.COLORS.GRID;
-            ctx.beginPath();
-            ctx.moveTo(x * cs, 0);
-            ctx.lineTo(x * cs, h);
-            ctx.stroke();
-        }
-        for (let y = 0; y <= CONFIG.GRID_HEIGHT; y++) {
-            ctx.strokeStyle = y % 5 === 0 ? CONFIG.COLORS.GRID_ACCENT : CONFIG.COLORS.GRID;
-            ctx.beginPath();
-            ctx.moveTo(0, y * cs);
-            ctx.lineTo(w, y * cs);
-            ctx.stroke();
-        }
-    }
+        ctx.save();
+        ctx.textAlign = 'center';
 
-    // --- Hindernisse ---
+        ctx.shadowColor = Config.COLORS.neonYellow;
+        ctx.shadowBlur = 8;
+        ctx.font = '14px "Press Start 2P", monospace';
+        ctx.fillStyle = Config.COLORS.neonYellow;
+        ctx.fillText('BESTENLISTE', W / 2, H / 2 - 70);
+        ctx.shadowBlur = 0;
 
-    drawObstacles(ctx, obstacles, time) {
-        const cs = CONFIG.CELL_SIZE;
-        obstacles.forEach(([ox, oy]) => {
-            // Leichtes Pulsieren
-            const pulse = Math.sin(time * 0.001 + ox * 0.5 + oy * 0.3) * 0.05;
+        ctx.font = '8px "Press Start 2P", monospace';
+        const top = highscores.slice(0, Config.MAX_HIGHSCORES);
+        top.forEach((entry, i) => {
+            const y = H / 2 - 40 + i * 18;
+            const rank = (i + 1) + '.';
+            const isTop3 = i < 3;
 
-            ctx.fillStyle = CONFIG.COLORS.OBSTACLE;
-            ctx.fillRect(ox * cs + 1, oy * cs + 1, cs - 2, cs - 2);
-
-            // Rand
-            ctx.strokeStyle = CONFIG.COLORS.OBSTACLE_BORDER;
-            ctx.lineWidth = 1;
-            ctx.strokeRect(ox * cs + 1.5, oy * cs + 1.5, cs - 3, cs - 3);
-
-            // Inneres Muster
-            ctx.fillStyle = `rgba(85, 102, 119, ${0.3 + pulse})`;
-            const innerSize = cs * 0.3;
-            ctx.fillRect(
-                ox * cs + (cs - innerSize) / 2,
-                oy * cs + (cs - innerSize) / 2,
-                innerSize, innerSize
+            ctx.fillStyle = isTop3 ? Config.COLORS.neonYellow : Config.COLORS.textDim;
+            ctx.fillText(
+                rank + ' ' + entry.name.padEnd(Config.MAX_NAME_LENGTH) + ' ' + String(entry.score).padStart(5),
+                W / 2, y
             );
         });
-    }
-}
 
-const ui = new UI();
+        if (top.length === 0) {
+            ctx.fillStyle = Config.COLORS.textDim;
+            ctx.fillText('NOCH KEINE EINTRAEGE', W / 2, H / 2);
+        }
+
+        // Weiter-Hinweis
+        if (Math.floor(time / 500) % 2 === 0) {
+            ctx.font = '8px "Press Start 2P", monospace';
+            ctx.fillStyle = Config.COLORS.neonGreen;
+            ctx.fillText('R=NOCHMAL  Q=MENUE', W / 2, H - 30);
+        }
+
+        ctx.restore();
+    },
+
+    // --- Highscore-Management (localStorage) ---
+
+    loadHighscores() {
+        try {
+            const data = localStorage.getItem(Config.STORAGE_KEY);
+            if (data) return JSON.parse(data);
+        } catch (e) {
+            console.warn('Highscores konnten nicht geladen werden');
+        }
+        return [];
+    },
+
+    saveHighscores(highscores) {
+        try {
+            localStorage.setItem(Config.STORAGE_KEY, JSON.stringify(highscores));
+        } catch (e) {
+            console.warn('Highscores konnten nicht gespeichert werden');
+        }
+    },
+
+    addHighscore(highscores, name, score) {
+        highscores.push({ name, score });
+        highscores.sort((a, b) => b.score - a.score);
+        return highscores.slice(0, Config.MAX_HIGHSCORES);
+    },
+
+    isHighscore(highscores, score) {
+        if (highscores.length < Config.MAX_HIGHSCORES) return true;
+        return score > highscores[highscores.length - 1].score;
+    }
+};
